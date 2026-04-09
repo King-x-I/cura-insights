@@ -1,0 +1,34 @@
+
+{
+  "tasks": {
+    "deploy": "supabase functions deploy"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "lib": ["deno.window", "dom"],
+    "types": ["./deno.d.ts"],
+    "typeRoots": ["./types", "./node_modules/@types"]
+  },
+  "importMap": "./import_map.json",
+  "fmt": {
+    "files": {
+      "include": ["**/*.ts"]
+    },
+    "options": {
+      "useTabs": false,
+      "lineWidth": 80,
+      "indentWidth": 2,
+      "singleQuote": true
+    }
+  },
+  "lint": {
+    "files": {
+      "include": ["**/*.ts"]
+    },
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}
