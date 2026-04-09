@@ -26,30 +26,30 @@ const AdminDashboard = () => {
         setIsLoading(true);
         
         // Fetch total consumers
-        const { count: consumerCount, error: consumerError } = await supabase
-          .from('consumer_details')
+        const { count: consumerCount, error: consumerError } = await (supabase
+          .from('consumer_details') as any)
           .select('*', { count: 'exact', head: true });
           
         if (consumerError) throw consumerError;
         
         // Fetch total providers
-        const { count: providerCount, error: providerError } = await supabase
-          .from('provider_details')
+        const { count: providerCount, error: providerError } = await (supabase
+          .from('provider_details') as any)
           .select('*', { count: 'exact', head: true });
           
         if (providerError) throw providerError;
         
         // Fetch pending provider approvals
-        const { count: pendingApprovalCount, error: pendingError } = await supabase
-          .from('provider_details')
+        const { count: pendingApprovalCount, error: pendingError } = await (supabase
+          .from('provider_details') as any)
           .select('*', { count: 'exact', head: true })
           .eq('is_approved', false);
           
         if (pendingError) throw pendingError;
         
         // Fetch total bookings
-        const { count: bookingCount, error: bookingError } = await supabase
-          .from('bookings')
+        const { count: bookingCount, error: bookingError } = await (supabase
+          .from('bookings') as any)
           .select('*', { count: 'exact', head: true });
           
         if (bookingError) throw bookingError;

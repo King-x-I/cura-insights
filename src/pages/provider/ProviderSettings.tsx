@@ -165,8 +165,8 @@ const ProviderSettings = () => {
         throw new Error('User not found');
       }
 
-      const { error: updateError } = await supabase
-        .from('provider_details')
+      const { error: updateError } = await (supabase
+        .from('provider_details') as any)
         .upsert({
           ...data,
           user_id: user.id,
