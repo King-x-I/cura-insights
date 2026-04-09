@@ -187,17 +187,11 @@ const ProviderSignup = () => {
 
       console.log('Provider signup completed successfully');
 
-      // Crucial: Set the user type in context before navigating
-      setUserType('provider');
-
-      toast.success('Account created successfully! Please check your email for verification.');
-      localStorage.setItem("cura-user", JSON.stringify({ 
-        role: "provider",
-        id: userId,
-        email: formData.email 
-      }));
-
-      navigate('/provider/dashboard');
+      toast.success('Account created! Your application is pending admin approval. You will be notified once approved.');
+      
+      // Sign out since provider needs approval before accessing dashboard
+      await supabase.auth.signOut();
+      navigate('/provider/login');
     } catch (error) {
       console.error('=== SIGNUP PROCESS FAILED ===');
       console.error('Error details:', error);
