@@ -89,28 +89,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log("Sign in successful:", logUser(data.user));
 
-      // Check user profile exists in the right table
-      const tableName = loginUserType === "consumer" ? "consumer_details" : "provider_details";
-      const { data: profileData, error: profileError } = await supabase
-        .from(tableName)
-        .select("*")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-
-      console.log(`${loginUserType} profile check:`, profileData ? "found" : "not found", profileError);
-
       // For providers, check approval status
       if (loginUserType === "provider") {
-        if (!profileData) {
+        const { data: providerData, error: providerError } = await supabase
+          .from("provider_details")
+          .select("*")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+
+        console.log("Provider profile check:", providerData ? "found" : "not found", providerError);
+
+        if (!providerData) {
+          await supabase.auth.signOut();
           throw new Error("No provider profile found. Please sign up first.");
         }
-        
-        const providerStatus = profileData.status;
-        const providerApproved = profileData.is_approved;
-        
-        console.log("Provider status:", providerStatus, "is_approved:", providerApproved);
 
-        if (providerStatus === "rejected") {
+        console.log("Provider status:", providerData.status, "is_approved:", providerData.is_approved);
+
+        if (providerData.status === "rejected") {
           await supabase.auth.signOut();
           throw new Error("Your provider application has been rejected. Please contact support.");
         }
