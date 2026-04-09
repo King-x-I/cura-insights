@@ -2,14 +2,13 @@ import React, { useState } from "react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/contexts/AuthContext";
 import LoginWithGoogle from "./LoginWithGoogle";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface LoginFormProps {
@@ -17,48 +16,47 @@ interface LoginFormProps {
 }
 
 const formSchema = z.object({
-  email: z
-    .string()
-    .min(1, { message: "Email is required" })
-    .email({ message: "Invalid email address" }),
-  password: z
-    .string()
-    .min(6, { message: "Password must be at least 6 characters" }),
+  email: z.string().min(1, "Email is required").email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 export function LoginForm({ userType }: LoginFormProps) {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
   const { signIn } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setLoginError(null);
-    
+    setIsPendingApproval(false);
+
     try {
       await signIn(values.email, values.password, userType);
       form.reset();
     } catch (error: any) {
       console.error("Login error:", error);
-      
-      // Provide more specific error messages
-      if (error.message.includes("Invalid login credentials")) {
-        setLoginError("Invalid email or password. Please check your credentials and try again.");
-      } else if (error.message.includes("Email not confirmed")) {
-        setLoginError("Please verify your email before logging in. Check your inbox for a verification link.");
-      } else if (error.message.includes("Failed to check user profile")) {
-        setLoginError("There was an issue with your account. Please try signing up again.");
+      const msg = error.message || "Failed to login";
+
+      if (msg.includes("pending approval")) {
+        setIsPendingApproval(true);
+        setLoginError(msg);
+      } else if (msg.includes("Invalid login credentials")) {
+        setLoginError("Invalid email or password. Please check your credentials.");
+      } else if (msg.includes("Email not confirmed")) {
+        setLoginError("Please verify your email before logging in. Check your inbox.");
+      } else if (msg.includes("rejected")) {
+        setLoginError(msg);
+      } else if (msg.includes("No provider profile")) {
+        setLoginError(msg);
       } else {
-        setLoginError(error.message || "Failed to login. Please try again.");
+        setLoginError(msg);
       }
     } finally {
       setIsLoading(false);
@@ -67,13 +65,22 @@ export function LoginForm({ userType }: LoginFormProps) {
 
   return (
     <Form {...form}>
-      {loginError && (
+      {isPendingApproval && (
+        <Alert className="mb-4 bg-amber-50 border-amber-300">
+          <Clock className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            {loginError}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {loginError && !isPendingApproval && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{loginError}</AlertDescription>
         </Alert>
       )}
-      
+
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
@@ -88,7 +95,7 @@ export function LoginForm({ userType }: LoginFormProps) {
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="password"
@@ -102,7 +109,7 @@ export function LoginForm({ userType }: LoginFormProps) {
             </FormItem>
           )}
         />
-        
+
         <Button
           type="submit"
           className="w-full bg-cura-primary hover:bg-indigo-600"

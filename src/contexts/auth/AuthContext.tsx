@@ -1,37 +1,17 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-
-// Local type definitions (replaces @supabase/supabase-js types)
-type User = {
-  id: string;
-  email?: string;
-  user_metadata?: Record<string, any>;
-  created_at?: string;
-};
-
-type Session = {
-  access_token: string;
-  user: User;
-};
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { UserType, AuthContextState } from "./types";
 import { useCheckUserType } from "./useCheckUserType";
-import { 
-  signOutUser, 
-  logUser, 
-  createConsumerProfile, 
-  createProviderProfile 
-} from "./utils";
+import { signOutUser, logUser, createConsumerProfile, createProviderProfile } from "./utils";
 
-// Use the simplified type definition to avoid deep instantiation
 type AuthContextType = AuthContextState | undefined;
-
 const AuthContext = createContext<AuthContextType>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [userType, setUserType] = useState<UserType>(null);
   const navigate = useNavigate();
@@ -39,6 +19,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     console.log("Setting up auth context...");
+
+    // Set up listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log("Auth state change event:", event, session?.user?.id);
@@ -48,18 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           setTimeout(async () => {
             const detectedType = await checkUserType(session.user.id);
-            
             if (detectedType) {
               setUserType(detectedType);
               console.log("Detected user type:", detectedType);
             } else if (checkAdminStatus(session.user)) {
               setUserType("admin");
-              console.log("Detected admin user");
             } else if (session.user.user_metadata?.user_type) {
               setUserType(session.user.user_metadata.user_type);
-              console.log("Using metadata user type:", session.user.user_metadata.user_type);
             }
-            
             setIsLoading(false);
           }, 0);
         } else {
@@ -69,26 +47,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    // THEN check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("Initial session check:", session ? "Session found" : "No session");
+      console.log("Initial session:", session ? "found" : "none");
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         setTimeout(async () => {
           const detectedType = await checkUserType(session.user.id);
-          
           if (detectedType) {
             setUserType(detectedType);
-            console.log("Initial detected user type:", detectedType);
           } else if (checkAdminStatus(session.user)) {
             setUserType("admin");
-            console.log("Initial detected admin user");
           } else if (session.user.user_metadata?.user_type) {
             setUserType(session.user.user_metadata.user_type);
-            console.log("Initial using metadata user type:", session.user.user_metadata.user_type);
           }
-          
           setIsLoading(false);
         }, 0);
       } else {
@@ -96,78 +70,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string, userType: "consumer" | "provider") => {
+  const signIn = async (email: string, password: string, loginUserType: "consumer" | "provider") => {
     setIsLoading(true);
-    console.log(`Attempting to sign in as ${userType} with email: ${email}`);
-    
+    console.log(`Signing in as ${loginUserType}: ${email}`);
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
         console.error("Login error:", error);
-        throw new Error(error.message || "Failed to sign in");
+        throw new Error(error.message);
       }
 
-      if (!data.user) {
-        throw new Error("No user data returned after login");
-      }
-      
+      if (!data.user) throw new Error("No user data returned");
+
       console.log("Sign in successful:", logUser(data.user));
-      
-      const tableName = userType === "consumer" ? "consumer_details" : "provider_details";
-      
+
+      // Check user profile exists in the right table
+      const tableName = loginUserType === "consumer" ? "consumer_details" : "provider_details";
       const { data: profileData, error: profileError } = await supabase
         .from(tableName)
         .select("*")
         .eq("user_id", data.user.id)
         .maybeSingle();
-      
-      if (!profileData || profileError) {
-        console.log(`${userType} profile not found or error occurred, creating one...`);
-        const success = userType === "consumer" 
-          ? await createConsumerProfile(
-              data.user.id, 
-              email, 
-              data.user.user_metadata?.full_name || email.split('@')[0]
-            )
-          : await createProviderProfile(
-              data.user.id, 
-              email, 
-              data.user.user_metadata?.full_name || email.split('@')[0]
-            );
-            
-        if (!success) {
-          console.error(`Failed to create ${userType} profile`);
-          // Don't throw error here, continue with login
+
+      console.log(`${loginUserType} profile check:`, profileData ? "found" : "not found", profileError);
+
+      // For providers, check approval status
+      if (loginUserType === "provider") {
+        if (!profileData) {
+          throw new Error("No provider profile found. Please sign up first.");
+        }
+        
+        const providerStatus = profileData.status;
+        const providerApproved = profileData.is_approved;
+        
+        console.log("Provider status:", providerStatus, "is_approved:", providerApproved);
+
+        if (providerStatus === "rejected") {
+          await supabase.auth.signOut();
+          throw new Error("Your provider application has been rejected. Please contact support.");
+        }
+
+        if (providerStatus === "pending" || !providerApproved) {
+          await supabase.auth.signOut();
+          throw new Error("Your account is pending approval. We'll notify you once your application is reviewed.");
         }
       }
-      
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: { user_type: userType }
-      });
 
-      if (updateError) {
-        console.error("Error updating user metadata:", updateError);
+      // For consumers, create profile if missing
+      if (loginUserType === "consumer" && !profileData) {
+        console.log("Creating consumer profile on login...");
+        await createConsumerProfile(
+          data.user.id,
+          email,
+          data.user.user_metadata?.full_name || email.split("@")[0]
+        );
       }
 
-      setUserType(userType);
+      // Update user metadata with type
+      await supabase.auth.updateUser({ data: { user_type: loginUserType } });
+
+      setUserType(loginUserType);
       setUser(data.user);
       setSession(data.session);
-      
-      navigate(`/${userType}/dashboard`, { replace: true });
-      toast.success("Login successful!");
 
+      navigate(`/${loginUserType}/dashboard`, { replace: true });
+      toast.success("Login successful!");
     } catch (error: any) {
       console.error("Login error:", error);
-      toast.error(error.message || "Failed to sign in");
       throw error;
     } finally {
       setIsLoading(false);
@@ -179,10 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
+          queryParams: { access_type: "offline", prompt: "consent" },
           redirectTo: `${window.location.origin}/auth/google-callback`,
         },
       });
@@ -192,48 +163,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string, userType: "consumer" | "provider") => {
+  const signUp = async (email: string, password: string, fullName: string, signupUserType: "consumer" | "provider") => {
     setIsLoading(true);
-    console.log(`Signing up as ${userType} with email: ${email}, name: ${fullName}`);
+    console.log(`Signing up as ${signupUserType}: ${email}, name: ${fullName}`);
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            full_name: fullName,
-            user_type: userType,
-          },
-          emailRedirectTo: `${window.location.origin}/${userType}/dashboard`,
+          data: { full_name: fullName, user_type: signupUserType },
+          emailRedirectTo: `${window.location.origin}/${signupUserType}/login`,
         },
       });
 
       if (error) throw error;
-      console.log("Sign up successful:", logUser(data.user));
+      if (!data.user) throw new Error("No user returned from signup");
 
-      if (userType === "consumer") {
-        await createConsumerProfile(
-          data.user.id,
-          email,
-          fullName
-        );
+      console.log("Signup successful:", logUser(data.user));
+
+      // Create the appropriate profile
+      if (signupUserType === "consumer") {
+        await createConsumerProfile(data.user.id, email, fullName);
       } else {
-        await createProviderProfile(
-          data.user.id,
-          email,
-          fullName
-        );
+        await createProviderProfile(data.user.id, email, fullName);
       }
 
-      setUserType(userType);
-      toast.success(
-        "Account created successfully! Please check your email for verification instructions."
-      );
-      
-      navigate(`/${userType}/dashboard`);
+      setUserType(signupUserType);
+
+      if (signupUserType === "provider") {
+        toast.success("Account created! Your application is pending admin approval. You'll be notified once approved.");
+        // Sign out provider since they need approval first
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setUserType(null);
+        navigate("/provider/login");
+      } else {
+        toast.success("Account created! Please check your email for verification.");
+        navigate("/consumer/login");
+      }
     } catch (error: any) {
       console.error("Signup error:", error);
-      toast.error(error.message || "Failed to create account");
       throw error;
     } finally {
       setIsLoading(false);
@@ -249,11 +220,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       navigate("/");
     }
   };
-  
-  const setUserTypeManually = (type: UserType) => {
-    console.log("Manually setting user type to:", type);
-    setUserType(type);
-  };
 
   return (
     <AuthContext.Provider
@@ -267,7 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signUp,
         signOut,
-        setUserType: setUserTypeManually,
+        setUserType: (type: UserType) => setUserType(type),
       }}
     >
       {children}
