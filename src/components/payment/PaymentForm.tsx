@@ -58,8 +58,8 @@ export function PaymentForm({
         // Update booking payment status in database (in a real app, this would be done via webhook)
         const updateBooking = async () => {
           try {
-            await supabase
-              .from('bookings')
+            await (supabase
+              .from('bookings') as any)
               .update({
                 payment_status: 'completed',
                 updated_at: new Date().toISOString()

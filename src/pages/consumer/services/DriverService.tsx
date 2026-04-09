@@ -120,22 +120,24 @@ const DriverService = () => {
 
       if (requestError) throw requestError;
 
-      // Also create in driver_booking_requests for backward compatibility
-      const { data: bookingRequest, error: bookingError } = await supabase
-        .from('driver_booking_requests')
+      // Also create in requests table for provider matching
+      const { data: bookingRequest, error: bookingError } = await (supabase
+        .from('requests') as any)
         .insert({
-          user_id: user.id,
-          location: values.pickupLocation,
-          destination: isRoundTrip ? values.pickupLocation : values.dropoffLocation,
-          date: new Date().toISOString().split('T')[0],
-          time: values.time,
-          duration: `${totalHours} hours`,
+          customer_id: user.id,
           service_type: 'driver',
+          location: values.pickupLocation,
           status: 'pending',
-          additional_notes: values.additionalNotes,
-          estimate_km: values.kilometers,
-          cost_estimate: totalCost,
-          is_round_trip: isRoundTrip
+          details: JSON.stringify({
+            destination: isRoundTrip ? values.pickupLocation : values.dropoffLocation,
+            date: new Date().toISOString().split('T')[0],
+            time: values.time,
+            duration: `${totalHours} hours`,
+            additional_notes: values.additionalNotes,
+            estimate_km: values.kilometers,
+            cost_estimate: totalCost,
+            is_round_trip: isRoundTrip
+          })
         })
         .select()
         .single();

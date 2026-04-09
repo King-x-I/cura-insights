@@ -174,7 +174,7 @@ const ProviderSignup = () => {
         console.error('Provider data insertion failed:', insertError);
         
         // If insert fails, try direct SQL insert
-        const { error: sqlError } = await supabase.rpc('insert_provider_details', {
+        const { error: sqlError } = await (supabase as any).rpc('insert_provider_details', {
           provider_data: providerData
         });
 

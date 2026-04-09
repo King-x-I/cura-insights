@@ -63,8 +63,8 @@ export const useProfileCompletion = (): ProfileCompletionHook => {
     try {
       const tableName = userType === "consumer" ? "consumer_details" : "provider_details";
       
-      const { error } = await supabase
-        .from(tableName)
+      const { error } = await (supabase
+        .from(tableName) as any)
         .update({ [fieldName]: value })
         .eq("user_id", user.id);
       
