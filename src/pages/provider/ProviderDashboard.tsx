@@ -309,7 +309,7 @@ const ProviderDashboard = () => {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: user?.email
-      });
+      } as any);
       
       if (error) throw error;
       
