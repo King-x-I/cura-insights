@@ -111,20 +111,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error("Your provider application has been rejected. Please contact support.");
         }
 
-        if (providerStatus === "pending" || !providerApproved) {
+        if (providerData.status === "pending" || !providerData.is_approved) {
           await supabase.auth.signOut();
           throw new Error("Your account is pending approval. We'll notify you once your application is reviewed.");
         }
       }
 
       // For consumers, create profile if missing
-      if (loginUserType === "consumer" && !profileData) {
-        console.log("Creating consumer profile on login...");
-        await createConsumerProfile(
-          data.user.id,
-          email,
-          data.user.user_metadata?.full_name || email.split("@")[0]
-        );
+      if (loginUserType === "consumer") {
+        const { data: consumerData } = await supabase
+          .from("consumer_details")
+          .select("user_id")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+
+        if (!consumerData) {
+          console.log("Creating consumer profile on login...");
+          await createConsumerProfile(
+            data.user.id,
+            email,
+            data.user.user_metadata?.full_name || email.split("@")[0]
+          );
+        }
       }
 
       // Update user metadata with type
